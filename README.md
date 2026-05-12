@@ -2,6 +2,29 @@
 
 Microserviço de autenticação desenvolvido com **Django** e **Django REST Framework**, rodando em containers **Docker** com banco de dados **PostgreSQL**.
 
+## 📂 Estrutura do Projeto e Documentação
+
+O projeto segue uma estrutura organizada para separar o código da documentação técnica:
+
+- `apps/`: Contém os microsserviços e aplicações Django.
+- `config/`: Configurações globais do projeto.
+- `docs/`: Documentação técnica e diagramas.
+
+## 🗺️ Modelagem de Dados (DER)
+
+A modelagem do banco de dados foi desenhada para suportar a autenticação integrada ao **SUAP** e a gestão de talentos do **NADIC**. O diagrama atualizado utiliza **UUIDs** para garantir a unicidade e segurança dos registros.
+
+### Entidades Principais
+
+- **User**: Armazena dados de autenticação (CPF, Matrícula) e informações de perfil para o Banco de Talentos (GitHub, LinkedIn, IRA).
+- **Institution & Course**: Hierarquia acadêmica para organizar a origem dos estudantes.
+- **Notification**: Sistema de alertas para feedbacks de avaliações da IA e novas oportunidades de bolsas.
+
+> [!TIP]
+> Visualização do diagrama (DER):
+>
+> ![DER Inicial](docs/DER-inicial.png)
+
 ## 🛠️ Requisitos
 
 - Docker
