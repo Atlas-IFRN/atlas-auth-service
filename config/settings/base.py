@@ -2,6 +2,7 @@
 Configurações base — comuns a todos os ambientes.
 """
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -11,6 +12,12 @@ import environ
 # ------------------------------------------------------------------------------
 # config/settings/base.py -> config/settings -> config -> <project_root>
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+# ------------------------------------------------------------------------------
+# AUTHENTICATION
+#------------------------------------------------------------------------------
+AUTH_USER_MODEL = "authentication.User"
 
 # ------------------------------------------------------------------------------
 # ENVIRONMENT VARIABLES
@@ -44,8 +51,32 @@ INSTALLED_APPS = [
     "apps.authentication",
 
     # External apps
-    "rest_framework"
+    "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
 ]
+
+# -------------------------------------------------------------------------------
+# Configuração Global do REST Framework
+# -------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
+
+#------------------------------------------------------------------------------
+# Configuração do SimpleJWT (Tempo de vida do token)
+#------------------------------------------------------------------------------
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
 
 # ------------------------------------------------------------------------------
 # MIDDLEWARE
