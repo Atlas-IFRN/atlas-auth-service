@@ -42,6 +42,9 @@ INSTALLED_APPS = [
 
     # Local apps
     "apps.authentication",
+
+    # External apps
+    "rest_framework"
 ]
 
 # ------------------------------------------------------------------------------
