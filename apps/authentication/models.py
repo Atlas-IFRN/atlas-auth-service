@@ -46,6 +46,8 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=10, choices=UserRole.choices, default=UserRole.STUDENT)
 
+    curriculo_lattes = models.URLField(null=True, blank=True)  # Somente para professores
+
     institution = models.ForeignKey('Institution', on_delete=models.SET_NULL, null=True, blank=True)
     course = models.ForeignKey('Course', on_delete=models.SET_NULL, null=True, blank=True)
 
