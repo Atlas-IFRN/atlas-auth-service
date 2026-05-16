@@ -3,7 +3,7 @@ import requests
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 
@@ -177,3 +177,23 @@ class SuapCallbackView(APIView):
                 "is_new_user": created 
             }
         }, status=status.HTTP_200_OK)
+
+class LogoutView(APIView):
+    # Apenas usuários autenticados podem acessar essa view para fazer logout
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # O frontend envia o refresh token para ser invalidado
+            refresh_token = request.data.get("refresh")
+
+            if not refresh_token:
+                return Response({"error": "O refresh token é obrigatório para fazer logout."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # Invalida o token para que não possa mais ser usado
+
+            return Response({"message": "Logout realizado com sucesso."}, status=status.HTTP_205_RESET_CONTENT)
+        except Exception:
+            # Se o token já estiver na blacklist ou for inválido, cai aqui
+            return Response({"error": "Token inválido ou já expirado."}, status=status.HTTP_400_BAD_REQUEST)
