@@ -23,7 +23,6 @@ class SuapLoginUrlView(APIView):
 
         return Response({'login_url': login_url}, status=status.HTTP_200_OK)
 
-
 class SuapCallbackView(APIView):
     permission_classes = [AllowAny]
 
@@ -70,10 +69,13 @@ class SuapCallbackView(APIView):
         
         tipo_usuario = str(suap_data.get("tipo_usuario", "")).lower()
         
-        # Variáveis acadêmicas iniciam vazias
+        # Variáveis acadêmicas para alunos iniciam vazias
         ira_aluno = None
         periodo_aluno = None
         curso_nome = None
+
+        # Variável para curriculo lattes, caso seja professor
+        curriculo_lattes = None
 
         if "aluno" in tipo_usuario:
             user_role = UserRole.STUDENT
@@ -94,8 +96,16 @@ class SuapCallbackView(APIView):
                     except ValueError:
                         ira_aluno = None
 
-        elif "servidor" in tipo_usuario or "professor" in tipo_usuario:
+        elif "docente" in tipo_usuario or "professor" in tipo_usuario:
             user_role = UserRole.TEACHER
+            
+            servidor_url = "https://suap.ifrn.edu.br/api/rh/servidores/"
+            servidor_response = requests.get(servidor_url, headers=headers)
+
+            if servidor_response.status_code == 200:
+                servidor_data = servidor_response.json()
+                curriculo_lattes = servidor_data.get("curriculo_lattes")
+
         else:
             return Response(
                 {"error": f"Acesso negado. A plataforma é restrita a professores e alunos. Seu perfil: {tipo_usuario}"}, 
@@ -120,7 +130,7 @@ class SuapCallbackView(APIView):
         
         identificacao_suap = suap_data.get("identificacao") 
         
-        # Usamos update_or_create para sempre atualizar notas e períodos a cada login
+        # Usamos update_or_create para sempre atualizar ira e períodos a cada login
         user, created = User.objects.update_or_create(
             matricula=identificacao_suap,
             defaults={
@@ -134,6 +144,7 @@ class SuapCallbackView(APIView):
                 "course": curso_obj,
                 "ira": ira_aluno,
                 "period": periodo_aluno,
+                "curriculo_lattes": curriculo_lattes,
             }
         )
 
