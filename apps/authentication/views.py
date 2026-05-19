@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 
 from .models import User, UserRole, Institution, Course, Notification
+from .serializers import UserSerializer
 
 class SuapLoginUrlView(APIView):
     permission_classes = [AllowAny]
@@ -197,3 +198,11 @@ class LogoutView(APIView):
         except Exception:
             # Se o token já estiver na blacklist ou for inválido, cai aqui
             return Response({"error": "Token inválido ou já expirado."}, status=status.HTTP_400_BAD_REQUEST)
+        
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
