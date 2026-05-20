@@ -1,6 +1,7 @@
+import concurrent.futures as futures
 import os
 import sys
-import concurrent.futures as futures
+
 import grpc
 
 # Paths
@@ -11,18 +12,19 @@ sys.path.insert(0, os.path.join(BASE_DIR, 'proto'))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
 import django
+
 django.setup()
 
-from proto import user_pb2, user_pb2_grpc
 from apps.authentication.models import User
+from apps.authentication.services.token_validator import validate_jwt
+from proto import user_pb2, user_pb2_grpc
+
 
 class UserServicer(user_pb2_grpc.UserServiceServicer):
     def GetUserProfile(self, request, context):
         try:
-            # Busca o usuário no banco pela matrícula fornecida
             user = User.objects.select_related('course', 'institution').get(matricula=request.matricula)
-            
-            # Monta a resposta binária mapeando os campos do Django para o Proto
+
             return user_pb2.UserResponse(
                 id=str(user.id),
                 matricula=user.matricula,
@@ -37,24 +39,42 @@ class UserServicer(user_pb2_grpc.UserServiceServicer):
                 github=user.github or "",
                 curriculo_lattes=user.curriculo_lattes or "",
                 course_name=user.course.name if user.course else "",
-                institution_name=user.institution.name if user.institution else ""
+                institution_name=user.institution.name if user.institution else "",
             )
-            
+
         except User.DoesNotExist:
             # Se o usuário não existir, avisa o outro serviço
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(f"Usuário com a matrícula {request.matricula} não foi encontrado.")
             return user_pb2.UserResponse()
 
+
+class AuthServiceServicer(user_pb2_grpc.AuthServiceServicer):
+
+    def ValidateToken(self, request, context):
+        payload = validate_jwt(request.token)
+
+        if not payload:
+            return user_pb2.ValidateTokenResponse(valid=False)
+
+        return user_pb2.ValidateTokenResponse(
+            valid=True,
+            user_id=payload["sub"],
+            role=payload["role"],
+            email=payload["email"],
+        )
+
+
 def serve():
     # Inicializa o servidor gRPC na porta interna 50051
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     user_pb2_grpc.add_UserServiceServicer_to_server(UserServicer(), server)
-    
+    user_pb2_grpc.add_AuthServiceServicer_to_server(AuthServiceServicer(), server)
     server.add_insecure_port('[::]:50051')
     print("🚀 Servidor gRPC do ATLAS Auth Service rodando na porta 50051...")
     server.start()
     server.wait_for_termination()
+
 
 if __name__ == '__main__':
     serve()
