@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 
-            'matricula', 
+            'registration_number', 
             'first_name',
             'full_name', 
             'email',  
@@ -19,7 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
             'about_me', 
             'linkedin', 
             'github', 
-            'curriculo_lattes',
+            'lattes_url',
             'course_name', 
             'institution_name'
         ]

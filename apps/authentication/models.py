@@ -10,9 +10,9 @@ class UserRole(models.TextChoices):
     # Administradores com a flag is_superuser do Django
 
 class NotificationType(models.TextChoices):
-    BOLSA = 'BOLSA', _('Bolsa')
-    AVALIACAO = 'AVALIACAO', _('Avaliação')
-    SISTEMA = 'SISTEMA', _('Sistema')
+    SCHOLARSHIP = 'SCHOLARSHIP', _('Scholarship')
+    EVALUATION = 'EVALUATION', _('Evaluation')
+    SYSTEM = 'SYSTEM', _('System')
 
 class Institution(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -31,7 +31,7 @@ class Course(models.Model):
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     cpf = models.CharField(max_length=14, unique=True)
-    matricula = models.CharField(max_length=14, unique=True)
+    registration_number = models.CharField(max_length=14, unique=True)
     
     #AbstractUser já tem first_name, last_name e is_active nativamente.
     full_name = models.CharField(max_length=255)
@@ -46,7 +46,7 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=10, choices=UserRole.choices, default=UserRole.STUDENT)
 
-    curriculo_lattes = models.URLField(null=True, blank=True)  # Somente para professores
+    lattes_url = models.URLField(null=True, blank=True)
 
     institution = models.ForeignKey('Institution', on_delete=models.SET_NULL, null=True, blank=True)
     course = models.ForeignKey('Course', on_delete=models.SET_NULL, null=True, blank=True)

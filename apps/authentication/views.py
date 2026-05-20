@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
 
-from .models import User, UserRole, Institution, Course, Notification
+from .models import User, UserRole, Institution, Course, Notification, NotificationType
 from .serializers import UserSerializer, NotificationSerializer
 
 class SuapLoginUrlView(APIView):
@@ -79,7 +79,7 @@ class SuapCallbackView(APIView):
         curso_nome = None
 
         # Variável para curriculo lattes, caso seja professor
-        curriculo_lattes = None
+        lattes_url = None
 
         if "aluno" in tipo_usuario:
             user_role = UserRole.STUDENT
@@ -108,7 +108,7 @@ class SuapCallbackView(APIView):
 
             if servidor_response.status_code == 200:
                 servidor_data = servidor_response.json()
-                curriculo_lattes = servidor_data.get("curriculo_lattes")
+                lattes_url = servidor_data.get("curriculo_lattes")
 
         else:
             return Response(
@@ -136,7 +136,7 @@ class SuapCallbackView(APIView):
         
         # Usamos update_or_create para sempre atualizar ira e períodos a cada login
         user, created = User.objects.update_or_create(
-            matricula=identificacao_suap,
+            registration_number=identificacao_suap,
             defaults={
                 "username": identificacao_suap,
                 "cpf": suap_data.get("cpf"),
@@ -148,7 +148,7 @@ class SuapCallbackView(APIView):
                 "course": curso_obj,
                 "ira": ira_aluno,
                 "period": periodo_aluno,
-                "curriculo_lattes": curriculo_lattes,
+                "lattes_url": lattes_url,
             }
         )
 
@@ -165,7 +165,7 @@ class SuapCallbackView(APIView):
                 user=user, 
                 title=welcome_title, 
                 message=welcome_msg,
-                type="SYSTEM"
+                type=NotificationType.SYSTEM
             )
 
         # Gerando o nosso próprio JWT
@@ -214,7 +214,7 @@ class UserDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, matricula):
-        user = get_object_or_404(User, matricula=matricula)
+        user = get_object_or_404(User, registration_number=matricula)
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

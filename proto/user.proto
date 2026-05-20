@@ -2,6 +2,21 @@ syntax = "proto3";
 
 package user;
 
+service AuthService {
+  rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool   valid   = 1;
+  string user_id = 2;
+  string role    = 3;
+  string email   = 4;
+}
+
 // Definição do Serviço que os outros microsserviços vão chamar
 service UserService {
   rpc GetUserProfile (UserRequest) returns (UserResponse);
