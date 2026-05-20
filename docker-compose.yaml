@@ -14,7 +14,7 @@ services:
       - db
     ports:
       - "8000:8000"
-      - "50051:50051" # Comunicação entre os backends via gRPC
+      - "50051:50051"
     env_file:
       - .env
     volumes:
