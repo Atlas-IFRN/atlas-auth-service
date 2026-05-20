@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Notification
 
 class UserSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True, default=None)
@@ -23,4 +23,16 @@ class UserSerializer(serializers.ModelSerializer):
             'curriculo_lattes',
             'course_name', 
             'institution_name'
+        ]
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = [
+            'id', 
+            'title', 
+            'message', 
+            'is_read', 
+            'type', 
+            'created_at'
         ]

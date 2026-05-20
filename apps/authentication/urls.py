@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SuapLoginUrlView, SuapCallbackView, LogoutView, UserProfileView, UserDetailView
+from .views import SuapLoginUrlView, SuapCallbackView, LogoutView, UserProfileView, UserDetailView, NotificationListView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -13,6 +13,9 @@ urlpatterns = [
     # Rotas de perfil
     path('users/me/', UserProfileView.as_view(), name='user_profile'),
     path('users/<str:matricula>/', UserDetailView.as_view(), name='user_detail'),
+
+    # Rota de notificações
+    path('notifications/', NotificationListView.as_view(), name='notification_list'),
     
     # Rota de logout
     path('logout/', LogoutView.as_view(), name='auth_logout'),
