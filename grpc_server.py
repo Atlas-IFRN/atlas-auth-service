@@ -4,10 +4,8 @@ import sys
 
 import grpc
 
-# Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
-sys.path.insert(0, os.path.join(BASE_DIR, 'proto'))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
@@ -20,7 +18,7 @@ from apps.authentication.services.token_validator import validate_jwt
 from proto import user_pb2, user_pb2_grpc
 
 
-class UserServicer(user_pb2_grpc.UserServiceServicer):
+class UserServiceServicer(user_pb2_grpc.UserServiceServicer):
     def GetUserProfile(self, request, context):
         try:
             user = User.objects.select_related('course', 'institution').get(registration_number=request.matricula)
@@ -43,7 +41,6 @@ class UserServicer(user_pb2_grpc.UserServiceServicer):
             )
 
         except User.DoesNotExist:
-            # Se o usuário não existir, avisa o outro serviço
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(f"Usuário com a matrícula {request.matricula} não foi encontrado.")
             return user_pb2.UserResponse()
@@ -66,9 +63,8 @@ class AuthServiceServicer(user_pb2_grpc.AuthServiceServicer):
 
 
 def serve():
-    # Inicializa o servidor gRPC na porta interna 50051
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    user_pb2_grpc.add_UserServiceServicer_to_server(UserServicer(), server)
+    user_pb2_grpc.add_UserServiceServicer_to_server(UserServiceServicer(), server)
     user_pb2_grpc.add_AuthServiceServicer_to_server(AuthServiceServicer(), server)
     server.add_insecure_port('[::]:50051')
     print("🚀 Servidor gRPC do ATLAS Auth Service rodando na porta 50051...")
