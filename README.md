@@ -135,26 +135,208 @@ Prefixo: `/api/auth/`
    - Body: `{"refresh": "..."}`
    - Faz blacklist do refresh token.
 
-### Configuração dos tokens (SimpleJWT)
+### Perfil e Notificações
 
-Configuração atual (em `config/settings/base.py`):
+- `GET /api/auth/users/me/` (autenticado)
+   - Retorna os dados do usuário autenticado (serializador `UserSerializer`).
 
-- `ACCESS_TOKEN_LIFETIME`: 60 minutos
-- `REFRESH_TOKEN_LIFETIME`: 1 dia
-- `ROTATE_REFRESH_TOKENS`: habilitado
-- `BLACKLIST_AFTER_ROTATION`: habilitado
+- `GET /api/auth/users/<matricula>/` (autenticado)
+   - Retorna os dados públicos do usuário identificado pela `matricula`.
 
-> Observação: o projeto define por padrão `IsAuthenticated` como permissão global do DRF. Por isso, endpoints públicos explicitam `AllowAny`.
+- `GET /api/auth/notifications/` (autenticado)
+   - Lista notificações recentes do usuário (últimos 5 dias por padrão).
 
-## Exemplos de Requisições (cURL)
+Exemplo: obter perfil do usuário atual
 
-### 1) Obter URL de login do SUAP
+```bash
+# Atlas Auth Service 🔐
+
+Microserviço de autenticação do ecossistema ATLAS. Implementado com Django + Django REST Framework, integrado ao SUAP (OAuth2) e com um servidor gRPC para expor perfis a outros microsserviços.
+
+Este README reescrito documenta: visão geral, instalação, variáveis de ambiente, endpoints HTTP (campos de resposta), gRPC, execução local e em Docker, migrações, testes e troubleshooting.
+
+---
+
+## Visão geral
+
+- API HTTP (Django) que lida com login via SUAP, emissão/renovação/revogação de tokens JWT e gerenciamento de perfil/notifications.
+- gRPC service (arquivo [grpc_server.py](grpc_server.py)) que expõe `GetUserProfile` para consumo por outros serviços.
+- Banco: PostgreSQL (container no `docker-compose.yaml`).
+
+Arquivos importantes:
+- Configuração do projeto: [config/](config/)
+- App de autenticação: [apps/authentication/](apps/authentication/)
+- Proto gRPC: [proto/user.proto](proto/user.proto)
+
+---
+
+## Requisitos
+
+- Python 3.11
+- Docker & Docker Compose (ou ambiente Python com Postgres acessível)
+- (opcional) virtualenv / .venv
+
+---
+
+## Quickstart — Docker (recomendado)
+
+1. Copie o arquivo de exemplo de variáveis:
+
+```bash
+cp .env.example .env
+```
+
+2. Suba os serviços:
+
+```bash
+docker compose up --build -d
+```
+
+3. Rode migrações e (opcional) crie superuser:
+
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser
+```
+
+4. Logs:
+
+```bash
+docker compose logs -f web
+```
+
+Parar/limpar:
+
+```bash
+docker compose down
+```
+
+---
+
+## Execução local (sem Docker)
+
+1. Crie e ative um virtualenv com Python 3.11.
+2. Instale dependências:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Configure `DATABASE_URL` no `.env` apontando para um Postgres local.
+4. Rode migrações e servidor:
+
+```bash
+python manage.py migrate
+python manage.py runserver
+```
+
+Para executar o servidor gRPC localmente (fora do Django process):
+
+```bash
+python grpc_server.py
+```
+
+---
+
+## Variáveis de ambiente (resumo)
+
+Veja [`.env.example`](.env.example) para a lista completa. Principais variáveis:
+
+- `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_SETTINGS_MODULE`
+- `DATABASE_URL` (ex.: `postgres://user:pass@db:5432/dbname`)
+- `POSTGRES_*` (quando usar docker-compose para o DB)
+- SUAP: `SUAP_CLIENT_ID`, `SUAP_CLIENT_SECRET`, `SUAP_REDIRECT_URI`, `SUAP_AUTHORIZATION_URL`, `SUAP_TOKEN_URL`, `SUAP_USER_INFO_URL`
+
+IMPORTANTE: garanta que `SUAP_REDIRECT_URI` esteja cadastrado no SUAP e igual ao valor em `.env`.
+
+---
+
+## Endpoints HTTP (detalhados)
+
+Base URL local: `http://localhost:8000`
+
+### Saúde
+
+- `GET /health/` → 200 `{ "status": "ok" }`
+
+### Admin
+
+- `GET /admin/` (interface administrativa do Django)
+
+### Autenticação (prefixo `/api/auth/`)
+
+- `GET /api/auth/suap/login/` (public)
+   - Retorna: `{ "login_url": "https://..." }` — frontend redireciona o usuário para o SUAP.
+
+- `POST /api/auth/suap/callback/` (public)
+   - Body: `{ "code": "..." }`
+   - Fluxo: troca `code` pelo token do SUAP, busca dados do usuário, sincroniza ou cria o usuário local e retorna JWT.
+   - Exemplo de resposta (200):
+
+```json
+{
+   "access": "<jwt_access>",
+   "refresh": "<jwt_refresh>",
+   "user": { "id": "<uuid>", "first_name": "Nome", "role": "STUDENT|TEACHER", "is_new_user": true }
+}
+```
+
+- `POST /api/auth/refresh/` (public)
+   - Body: `{ "refresh": "..." }`
+   - Retorna novo `access` (e possivelmente novo `refresh`, dependendo da rotação configurada).
+
+- `POST /api/auth/logout/` (authenticated)
+   - Header: `Authorization: Bearer <access>`
+   - Body: `{ "refresh": "..." }`
+   - Ação: marca o `refresh` na blacklist (invalidando-o).
+
+### Perfil e Notificações (authenticated)
+
+- `GET /api/auth/users/me/`
+   - Retorna os campos do usuário autenticado (ver lista de campos abaixo).
+
+- `GET /api/auth/users/<matricula>/`
+   - Retorna o perfil público do usuário pela `matricula`.
+
+- `GET /api/auth/notifications/`
+   - Retorna notificações recentes do usuário (filtro por padrão: últimos 5 dias).
+
+Campos retornados pelo `UserSerializer` (arquivo [apps/authentication/serializers.py](apps/authentication/serializers.py)):
+
+- `id` (UUID)
+- `matricula` (string)
+- `first_name` (string)
+- `full_name` (string)
+- `email` (string)
+- `cpf` (string)
+- `role` ("STUDENT" | "TEACHER")
+- `ira` (float | null)
+- `period` (int | null)
+- `about_me` (string | null)
+- `linkedin` (url | null)
+- `github` (url | null)
+- `curriculo_lattes` (url | null)
+- `course_name` (string | null)
+- `institution_name` (string | null)
+
+Campos retornados pelo `NotificationSerializer` (arquivo [apps/authentication/serializers.py](apps/authentication/serializers.py)):
+
+- `id` (UUID)
+- `title` (string)
+- `message` (string)
+- `is_read` (boolean)
+- `type` (string — ex.: `BOLSA`, `AVALIACAO`, `SISTEMA`)
+- `created_at` (datetime)
+
+Exemplos (cURL):
+
+Obter URL de login SUAP:
 
 ```bash
 curl -X GET http://localhost:8000/api/auth/suap/login/
 ```
 
-### 2) Enviar o `code` do SUAP e receber JWT
+Enviar `code` e trocar por JWT:
 
 ```bash
 curl -X POST http://localhost:8000/api/auth/suap/callback/ \
@@ -162,42 +344,61 @@ curl -X POST http://localhost:8000/api/auth/suap/callback/ \
    -d '{"code":"SEU_CODE_AQUI"}'
 ```
 
-### 3) Renovar sessão
+Obter perfil autenticado:
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/refresh/ \
-   -H "Content-Type: application/json" \
-   -d '{"refresh":"SEU_REFRESH_AQUI"}'
+curl -X GET http://localhost:8000/api/auth/users/me/ \
+   -H "Authorization: Bearer SEU_ACCESS_AQUI"
 ```
 
-### 4) Logout (blacklist do refresh)
+Listar notificações:
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/logout/ \
-   -H "Authorization: Bearer SEU_ACCESS_AQUI" \
-   -H "Content-Type: application/json" \
-   -d '{"refresh":"SEU_REFRESH_AQUI"}'
+curl -X GET http://localhost:8000/api/auth/notifications/ \
+   -H "Authorization: Bearer SEU_ACCESS_AQUI"
 ```
 
-## Desenvolvimento (sem Docker) — opcional
+---
 
-Se você preferir rodar localmente (fora do container), garanta:
+## gRPC: serviço de perfil
 
-1) Python 3.11 e ambiente virtual ativo
-2) `DATABASE_URL` apontando para um Postgres acessível localmente
-3) `.env` configurado
+- Proto principal: [proto/user.proto](proto/user.proto)
+- Serviço exposto: `UserService.GetUserProfile(UserRequest) -> UserResponse`.
+- Campos do `UserResponse` espelham o perfil (sem CPF) — ver o proto para o esquema completo.
+- Servidor gRPC: [grpc_server.py](grpc_server.py) (escuta na porta `50051`).
 
-Instale dependências e rode:
+Regenerar stubs (quando alterar `.proto`):
 
 ```bash
-pip install -r requirements.txt
+python -m grpc_tools.protoc -I=proto --python_out=proto --grpc_python_out=proto proto/user.proto
+```
+
+No container, a porta `50051` já está mapeada pelo `docker-compose.yaml`.
+
+---
+
+## Migrações e administração
+
+- Rodar migrações:
+
+```bash
 python manage.py migrate
-python manage.py runserver
 ```
 
-## Qualidade de Código (pre-commit)
+- Criar superuser:
 
-O projeto inclui hooks de formatação e validação (Black, isort, autoflake e `python manage.py check`). Para usar:
+```bash
+python manage.py createsuperuser
+```
+
+---
+
+## Testes e qualidade de código
+
+- Atualmente não existem testes automatizados implementados ([apps/authentication/tests.py](apps/authentication/tests.py) está vazio).
+- Hooks pre-commit configurados em [`.pre-commit-config.yaml`](.pre-commit-config.yaml) (Black, isort, autoflake, checagem Django).
+
+Instalar e usar pre-commit:
 
 ```bash
 pip install pre-commit
@@ -205,8 +406,25 @@ pre-commit install
 pre-commit run --all-files
 ```
 
+---
+
 ## Troubleshooting rápido
 
-- **Erro de conexão com DB**: confirme `DATABASE_URL` e se o container `db` está de pé (`docker compose ps`).
-- **Callback do SUAP falhando**: revise `SUAP_REDIRECT_URI`, `SUAP_CLIENT_ID` e `SUAP_CLIENT_SECRET`.
-- **`ALLOWED_HOSTS`**: em dev, mantenha `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`.
+- Erro de conexão com DB: verifique `DATABASE_URL` e se o serviço `db` está ativo (`docker compose ps`).
+- Callback do SUAP falhando: confirme `SUAP_REDIRECT_URI`, `SUAP_CLIENT_ID` e `SUAP_CLIENT_SECRET`.
+- Erros de permissão no DRF: por padrão `IsAuthenticated` é global — confirme `permission_classes` nas views públicas.
+
+---
+
+## Próximos passos recomendados
+
+- Adicionar testes unitários e de integração para o fluxo SUAP e para o servidor gRPC.
+- Adicionar um entrypoint que rode Django + gRPC em processos separados (ex.: `gunicorn` + supervisor) ou dividir gRPC em outro serviço no `docker-compose`.
+- Documentar contrato de API gRPC e exemplos de chamadas de cliente (Python/Go).
+
+---
+
+Se quiser, eu:
+- adiciono os exemplos de payloads JSON completos em cada endpoint,
+- documento os campos com exemplos reais retornados pelo `UserSerializer`, ou
+- altero o `docker-compose` para executar Django + gRPC em serviços separados.
