@@ -7,9 +7,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from datetime import timedelta
 
 from .models import User, UserRole, Institution, Course, Notification
-from .serializers import UserSerializer
+from .serializers import UserSerializer, NotificationSerializer
 
 class SuapLoginUrlView(APIView):
     permission_classes = [AllowAny]
@@ -215,4 +217,15 @@ class UserDetailView(APIView):
         user = get_object_or_404(User, matricula=matricula)
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
+
+class NotificationListView(APIView):
+    permission_classes = [IsAuthenticated]
+    filtro_de_dias = timezone.now() - timedelta(days=5)
+
+    def get(self, request):
+        notificacoes = Notification.objects.filter(
+                user=request.user, 
+                created_at__gte = self.filtro_de_dias
+            ).order_by('-created_at')
+        serializer = NotificationSerializer(notificacoes, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
