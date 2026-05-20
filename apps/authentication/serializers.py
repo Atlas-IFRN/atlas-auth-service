@@ -13,7 +13,6 @@ class UserSerializer(serializers.ModelSerializer):
             'first_name',
             'full_name', 
             'email', 
-            'cpf', 
             'role', 
             'ira', 
             'period', 
