@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 
 from .models import User, UserRole, Institution, Course, Notification
 from .serializers import UserSerializer
@@ -206,3 +207,12 @@ class UserProfileView(APIView):
         user = request.user
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class UserDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, matricula):
+        user = get_object_or_404(User, matricula=matricula)
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
