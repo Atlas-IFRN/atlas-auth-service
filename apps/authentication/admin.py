@@ -6,15 +6,15 @@ from .models import User, Institution, Course, Notification
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     # Campos que aparecerão na lista principal
-    list_display = ('matricula', 'first_name', 'role', 'course', 'ira', 'is_staff')
+    list_display = ('registration_number', 'first_name', 'role', 'course', 'ira', 'is_staff')
     # Filtros laterais
     list_filter = ('role', 'course', 'institution', 'is_staff')
     # Campos de pesquisa
-    search_fields = ('matricula', 'full_name', 'email')
+    search_fields = ('registration_number', 'full_name', 'email')
     
     # Organização dos campos dentro do formulário de edição
     fieldsets = UserAdmin.fieldsets + (
-        ('Dados Académicos', {'fields': ('matricula', 'cpf', 'full_name', 'role', 'ira', 'period', 'institution', 'course')}),
+        ('Academic Data', {'fields': ('registration_number', 'cpf', 'full_name', 'role', 'ira', 'period', 'institution', 'course')}),
         ('Links Sociais', {'fields': ('linkedin', 'github', 'about_me')}),
     )
 

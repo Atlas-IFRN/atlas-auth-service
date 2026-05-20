@@ -23,11 +23,11 @@ from proto import user_pb2, user_pb2_grpc
 class UserServicer(user_pb2_grpc.UserServiceServicer):
     def GetUserProfile(self, request, context):
         try:
-            user = User.objects.select_related('course', 'institution').get(matricula=request.matricula)
+            user = User.objects.select_related('course', 'institution').get(registration_number=request.matricula)
 
             return user_pb2.UserResponse(
                 id=str(user.id),
-                matricula=user.matricula,
+                matricula=user.registration_number,
                 first_name=user.first_name or "",
                 full_name=user.full_name or "",
                 email=user.email or "",
@@ -37,7 +37,7 @@ class UserServicer(user_pb2_grpc.UserServiceServicer):
                 about_me=user.about_me or "",
                 linkedin=user.linkedin or "",
                 github=user.github or "",
-                curriculo_lattes=user.curriculo_lattes or "",
+                curriculo_lattes=user.lattes_url or "",
                 course_name=user.course.name if user.course else "",
                 institution_name=user.institution.name if user.institution else "",
             )
