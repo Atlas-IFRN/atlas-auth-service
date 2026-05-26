@@ -170,6 +170,8 @@ class SuapCallbackView(APIView):
 
         # Gerando o nosso próprio JWT
         refresh = RefreshToken.for_user(user)
+        refresh["role"] = user.role
+        refresh["email"] = user.email or ""
 
         return Response(
             {

@@ -21,7 +21,11 @@ from proto import user_pb2, user_pb2_grpc
 class UserServiceServicer(user_pb2_grpc.UserServiceServicer):
     def GetUserProfile(self, request, context):
         try:
-            user = User.objects.select_related('course', 'institution').get(registration_number=request.matricula)
+            lookup_value = (request.matricula or "").strip()
+            try:
+                user = User.objects.select_related('course', 'institution').get(registration_number=lookup_value)
+            except User.DoesNotExist:
+                user = User.objects.select_related('course', 'institution').get(id=lookup_value)
 
             return user_pb2.UserResponse(
                 id=str(user.id),
@@ -42,7 +46,7 @@ class UserServiceServicer(user_pb2_grpc.UserServiceServicer):
 
         except User.DoesNotExist:
             context.set_code(grpc.StatusCode.NOT_FOUND)
-            context.set_details(f"Usuário com a matrícula {request.matricula} não foi encontrado.")
+            context.set_details(f"Usuário com a matrícula ou ID {request.matricula} não foi encontrado.")
             return user_pb2.UserResponse()
 
 
