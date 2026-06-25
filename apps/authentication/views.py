@@ -274,3 +274,40 @@ class NotificationMarkAllReadView(APIView):
     def post(self, request):
         updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({"updated": updated}, status=status.HTTP_200_OK)
+
+
+class InternalValidateView(APIView):
+    """Endpoint interno usado pelo Nginx (auth_request) como barreira de
+    autenticação na borda. Valida o JWT do header Authorization e, em caso
+    de sucesso, devolve 200 com os headers X-User-Id e X-User-Role para o
+    Nginx injetar nas requisições repassadas aos serviços downstream.
+
+    Token ausente/inválido resulta em 401 automaticamente (IsAuthenticated).
+    Não deve ser exposto publicamente — fica atrás do prefixo /api/auth/,
+    chamado apenas internamente pelo gateway.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _validate(self, request):
+        resp = Response(status=status.HTTP_200_OK)
+        resp["X-User-Id"] = str(request.user.id)
+        resp["X-User-Role"] = request.user.role
+        return resp
+
+    # auth_request pode emitir a subrequisição com métodos variados;
+    # respondemos a todos da mesma forma.
+    def get(self, request):
+        return self._validate(request)
+
+    def post(self, request):
+        return self._validate(request)
+
+    def put(self, request):
+        return self._validate(request)
+
+    def patch(self, request):
+        return self._validate(request)
+
+    def delete(self, request):
+        return self._validate(request)
