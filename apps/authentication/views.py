@@ -1,7 +1,10 @@
 import os
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 import requests
+from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -71,9 +74,16 @@ class SuapCallbackView(APIView):
 
         suap_data = user_info_response.json()
 
+        # O /api/rh/meus-dados/ aninha os dados de identidade em "vinculo"
+        # (nome completo, campus, curso, currículo lattes). Mantemos fallback
+        # para os campos planos do schema antigo (/api/rh/eu/, v2) caso a
+        # SUAP_USER_INFO_URL aponte para outro endpoint.
+        vinculo = suap_data.get("vinculo") or {}
+
         # --- APLICAÇÃO DE REGRAS DE NEGÓCIO & BUSCA ACADÊMICA ---
 
-        tipo_usuario = str(suap_data.get("tipo_usuario", "")).lower()
+        # Schema atual expõe "tipo_vinculo" ("Aluno"/"Servidor"); o antigo, "tipo_usuario".
+        tipo_usuario = str(suap_data.get("tipo_vinculo") or suap_data.get("tipo_usuario") or "").lower()
 
         # Variáveis acadêmicas para alunos iniciam vazias
         ira_aluno = None
@@ -82,6 +92,13 @@ class SuapCallbackView(APIView):
 
         # Variável para curriculo lattes, caso seja professor
         lattes_url = None
+
+        # Identidade suplementar para servidor/docente. O "vinculo" de servidor no
+        # /meus-dados/ tem forma diferente do de aluno (cargo/categoria em vez de
+        # nome/campus), então o nome completo e o campus podem não vir ali. O
+        # /api/rh/eu/ tem schema plano e uniforme (nome_registro, campus) para
+        # qualquer tipo de usuário e serve de fallback. Fica {} para alunos.
+        eu_data = {}
 
         if "aluno" in tipo_usuario:
             user_role = UserRole.STUDENT
@@ -102,15 +119,17 @@ class SuapCallbackView(APIView):
                     except ValueError:
                         ira_aluno = None
 
-        elif "docente" in tipo_usuario or "professor" in tipo_usuario:
+        elif "servidor" in tipo_usuario or "docente" in tipo_usuario or "professor" in tipo_usuario:
             user_role = UserRole.TEACHER
 
-            servidor_url = "https://suap.ifrn.edu.br/api/rh/servidores/"
-            servidor_response = requests.get(servidor_url, headers=headers)
+            # O currículo Lattes pode vir aninhado no "vinculo" do /meus-dados/.
+            lattes_url = vinculo.get("curriculo_lattes")
 
-            if servidor_response.status_code == 200:
-                servidor_data = servidor_response.json()
-                lattes_url = servidor_data.get("curriculo_lattes")
+            # Busca nome completo e campus no /api/rh/eu/ (schema plano), pois o
+            # "vinculo" de servidor não segue o mesmo formato do de aluno.
+            eu_response = requests.get("https://suap.ifrn.edu.br/api/rh/eu/", headers=headers)
+            if eu_response.status_code == 200:
+                eu_data = eu_response.json()
 
         else:
             return Response(
@@ -122,7 +141,7 @@ class SuapCallbackView(APIView):
 
         # Busca ou cria a Instituição (Campus)
         instituicao_obj = None
-        campus_nome = suap_data.get("campus")
+        campus_nome = vinculo.get("campus") or eu_data.get("campus") or suap_data.get("campus")
         if campus_nome:
             instituicao_obj, _ = Institution.objects.get_or_create(name=campus_nome)
 
@@ -131,9 +150,23 @@ class SuapCallbackView(APIView):
         if curso_nome:
             curso_obj, _ = Course.objects.get_or_create(name=curso_nome)
 
+        # --- FOTO DE PERFIL (SUAP) ---
+        # Preferimos a foto de maior resolução (150x200); caímos para a 75x100 e,
+        # por fim, para o campo "foto" plano (schema antigo). O SUAP pode devolver
+        # caminho relativo (/media/...) ou URL absoluta; normalizamos para absoluta.
+        foto_suap = (
+            suap_data.get("url_foto_150x200")
+            or suap_data.get("url_foto_75x100")
+            or suap_data.get("foto")
+            or eu_data.get("foto")
+        )
+        if foto_suap and foto_suap.startswith("/"):
+            partes = urlsplit(user_info_url)
+            foto_suap = f"{partes.scheme}://{partes.netloc}{foto_suap}"
+
         # --- SALVAR OU ATUALIZAR O USUÁRIO ---
 
-        identificacao_suap = suap_data.get("identificacao")
+        identificacao_suap = suap_data.get("matricula") or suap_data.get("identificacao")
 
         # Usamos update_or_create para sempre atualizar ira e períodos a cada login
         user, created = User.objects.update_or_create(
@@ -141,11 +174,17 @@ class SuapCallbackView(APIView):
             defaults={
                 "username": identificacao_suap,
                 "cpf": suap_data.get("cpf"),
-                "email": suap_data.get("email_preferencial")
-                or suap_data.get("email_academico")
-                or suap_data.get("email"),
+                "email": suap_data.get("email")
+                or eu_data.get("email_preferencial")
+                or eu_data.get("email_academico")
+                or eu_data.get("email"),
                 "first_name": suap_data.get("nome_usual") or suap_data.get("primeiro_nome"),
-                "full_name": suap_data.get("nome"),
+                "full_name": vinculo.get("nome")
+                or eu_data.get("nome_registro")
+                or eu_data.get("nome")
+                or suap_data.get("nome")
+                or suap_data.get("nome_usual"),
+                "image": foto_suap,
                 "role": user_role,
                 "institution": instituicao_obj,
                 "course": curso_obj,
@@ -169,13 +208,25 @@ class SuapCallbackView(APIView):
             )
 
         # Gerando o nosso próprio JWT
+        # Claims extras (role/email) embarcados no token para que os demais
+        # serviços validem localmente pelo header, sem chamar o auth.
         refresh = RefreshToken.for_user(user)
+        refresh["role"] = user.role
+        refresh["email"] = user.email or ""
 
         return Response(
             {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
-                "user": {"id": user.id, "first_name": user.first_name, "role": user.role, "is_new_user": created},
+                "user": {
+                    "id": user.id,
+                    "first_name": user.first_name,
+                    "full_name": user.full_name,
+                    "registration_number": user.registration_number,
+                    "image": user.image,
+                    "role": user.role,
+                    "is_new_user": created,
+                },
             },
             status=status.HTTP_200_OK,
         )
@@ -222,10 +273,27 @@ class UserProfileView(APIView):
 
 
 class UserDetailView(APIView):
+    """Resolve um usuário por matrícula (registration_number) ou por UUID (id).
+
+    Substitui o antigo GetUserProfile do servidor gRPC (já removido): os
+    serviços de tracks e scholarship guardam o usuário como UUID e precisam
+    resolvê-lo pela API HTTP interna, enquanto o frontend costuma consultar
+    pela matrícula. O mesmo endpoint aceita os dois formatos.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request, matricula):
-        user = get_object_or_404(User, registration_number=matricula)
+        lookup_value = (matricula or "").strip()
+
+        base_qs = User.objects.select_related("course", "institution")
+        user = base_qs.filter(registration_number=lookup_value).first()
+        if user is None:
+            try:
+                user = base_qs.get(id=lookup_value)
+            except (User.DoesNotExist, ValidationError, ValueError):
+                raise Http404("Usuário não encontrado por matrícula ou ID.")
+
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
