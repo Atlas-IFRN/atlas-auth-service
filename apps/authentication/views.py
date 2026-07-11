@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 import requests
 from django.core.exceptions import ValidationError
@@ -133,6 +134,18 @@ class SuapCallbackView(APIView):
         if curso_nome:
             curso_obj, _ = Course.objects.get_or_create(name=curso_nome)
 
+        # --- FOTO DE PERFIL (SUAP) ---
+        # O SUAP pode devolver a foto como caminho relativo (/media/...) ou como
+        # URL absoluta, dependendo do endpoint. Normalizamos para URL absoluta.
+        foto_suap = (
+            suap_data.get("foto")
+            or suap_data.get("url_foto_150x200")
+            or suap_data.get("url_foto_75x100")
+        )
+        if foto_suap and foto_suap.startswith("/"):
+            partes = urlsplit(user_info_url)
+            foto_suap = f"{partes.scheme}://{partes.netloc}{foto_suap}"
+
         # --- SALVAR OU ATUALIZAR O USUÁRIO ---
 
         identificacao_suap = suap_data.get("identificacao")
@@ -148,6 +161,7 @@ class SuapCallbackView(APIView):
                 or suap_data.get("email"),
                 "first_name": suap_data.get("nome_usual") or suap_data.get("primeiro_nome"),
                 "full_name": suap_data.get("nome"),
+                "image": foto_suap,
                 "role": user_role,
                 "institution": instituicao_obj,
                 "course": curso_obj,
@@ -181,7 +195,15 @@ class SuapCallbackView(APIView):
             {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
-                "user": {"id": user.id, "first_name": user.first_name, "role": user.role, "is_new_user": created},
+                "user": {
+                    "id": user.id,
+                    "first_name": user.first_name,
+                    "full_name": user.full_name,
+                    "registration_number": user.registration_number,
+                    "image": user.image,
+                    "role": user.role,
+                    "is_new_user": created,
+                },
             },
             status=status.HTTP_200_OK,
         )
