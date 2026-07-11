@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
+    InternalValidateView,
     LogoutView,
     NotificationListView,
     NotificationMarkAllReadView,
@@ -19,6 +20,9 @@ urlpatterns = [
 
     # Rotas de refresh (Renovação de sessão)
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Validação interna usada pelo Nginx (auth_request) — não pública
+    path('internal/validate/', InternalValidateView.as_view(), name='internal_validate'),
 
     # Rotas de perfil
     path('me/', UserProfileView.as_view(), name='user_me'),

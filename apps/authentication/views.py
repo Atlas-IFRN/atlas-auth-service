@@ -2,6 +2,8 @@ import os
 from datetime import timedelta
 
 import requests
+from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -169,6 +171,8 @@ class SuapCallbackView(APIView):
             )
 
         # Gerando o nosso próprio JWT
+        # Claims extras (role/email) embarcados no token para que os demais
+        # serviços validem localmente pelo header, sem chamar o auth.
         refresh = RefreshToken.for_user(user)
         refresh["role"] = user.role
         refresh["email"] = user.email or ""
@@ -224,10 +228,27 @@ class UserProfileView(APIView):
 
 
 class UserDetailView(APIView):
+    """Resolve um usuário por matrícula (registration_number) ou por UUID (id).
+
+    Substitui o antigo GetUserProfile do servidor gRPC (já removido): os
+    serviços de tracks e scholarship guardam o usuário como UUID e precisam
+    resolvê-lo pela API HTTP interna, enquanto o frontend costuma consultar
+    pela matrícula. O mesmo endpoint aceita os dois formatos.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request, matricula):
-        user = get_object_or_404(User, registration_number=matricula)
+        lookup_value = (matricula or "").strip()
+
+        base_qs = User.objects.select_related("course", "institution")
+        user = base_qs.filter(registration_number=lookup_value).first()
+        if user is None:
+            try:
+                user = base_qs.get(id=lookup_value)
+            except (User.DoesNotExist, ValidationError, ValueError):
+                raise Http404("Usuário não encontrado por matrícula ou ID.")
+
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -276,3 +297,40 @@ class NotificationMarkAllReadView(APIView):
     def post(self, request):
         updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({"updated": updated}, status=status.HTTP_200_OK)
+
+
+class InternalValidateView(APIView):
+    """Endpoint interno usado pelo Nginx (auth_request) como barreira de
+    autenticação na borda. Valida o JWT do header Authorization e, em caso
+    de sucesso, devolve 200 com os headers X-User-Id e X-User-Role para o
+    Nginx injetar nas requisições repassadas aos serviços downstream.
+
+    Token ausente/inválido resulta em 401 automaticamente (IsAuthenticated).
+    Não deve ser exposto publicamente — fica atrás do prefixo /api/auth/,
+    chamado apenas internamente pelo gateway.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _validate(self, request):
+        resp = Response(status=status.HTTP_200_OK)
+        resp["X-User-Id"] = str(request.user.id)
+        resp["X-User-Role"] = request.user.role
+        return resp
+
+    # auth_request pode emitir a subrequisição com métodos variados;
+    # respondemos a todos da mesma forma.
+    def get(self, request):
+        return self._validate(request)
+
+    def post(self, request):
+        return self._validate(request)
+
+    def put(self, request):
+        return self._validate(request)
+
+    def patch(self, request):
+        return self._validate(request)
+
+    def delete(self, request):
+        return self._validate(request)

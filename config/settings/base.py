@@ -36,6 +36,9 @@ DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_CREDENTIALS = True
+
 # ------------------------------------------------------------------------------
 # APPS
 # ------------------------------------------------------------------------------
@@ -51,6 +54,7 @@ INSTALLED_APPS = [
     "apps.authentication",
 
     # External apps
+    "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
@@ -93,6 +97,7 @@ SIMPLE_JWT = {
 # ------------------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -147,7 +152,7 @@ USE_TZ = True
 # ------------------------------------------------------------------------------
 # STATIC FILES
 # ------------------------------------------------------------------------------
-STATIC_URL = "static/"
+STATIC_URL = "/api/auth/static/"
 
 # ------------------------------------------------------------------------------
 # DEFAULTS
