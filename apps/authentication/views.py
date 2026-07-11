@@ -169,7 +169,11 @@ class SuapCallbackView(APIView):
             )
 
         # Gerando o nosso próprio JWT
+        # Claims extras (role/email) embarcados no token para que os demais
+        # serviços validem localmente pelo header, sem chamar o auth.
         refresh = RefreshToken.for_user(user)
+        refresh["role"] = user.role
+        refresh["email"] = user.email or ""
 
         return Response(
             {
