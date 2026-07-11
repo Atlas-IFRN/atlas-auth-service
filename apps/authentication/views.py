@@ -2,6 +2,8 @@ import os
 from datetime import timedelta
 
 import requests
+from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -226,10 +228,27 @@ class UserProfileView(APIView):
 
 
 class UserDetailView(APIView):
+    """Resolve um usuário por matrícula (registration_number) ou por UUID (id).
+
+    Substitui o antigo GetUserProfile do servidor gRPC (já removido): os
+    serviços de tracks e scholarship guardam o usuário como UUID e precisam
+    resolvê-lo pela API HTTP interna, enquanto o frontend costuma consultar
+    pela matrícula. O mesmo endpoint aceita os dois formatos.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request, matricula):
-        user = get_object_or_404(User, registration_number=matricula)
+        lookup_value = (matricula or "").strip()
+
+        base_qs = User.objects.select_related("course", "institution")
+        user = base_qs.filter(registration_number=lookup_value).first()
+        if user is None:
+            try:
+                user = base_qs.get(id=lookup_value)
+            except (User.DoesNotExist, ValidationError, ValueError):
+                raise Http404("Usuário não encontrado por matrícula ou ID.")
+
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
