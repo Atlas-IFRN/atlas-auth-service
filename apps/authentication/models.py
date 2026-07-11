@@ -41,6 +41,9 @@ class User(AbstractUser):
     # AbstractUser já tem first_name, last_name e is_active nativamente.
     full_name = models.CharField(max_length=255)
 
+    # Foto de perfil (URL vinda do SUAP)
+    image = models.URLField(max_length=500, null=True, blank=True)
+
     # Campos acadêmicos somente para alunos
     ira = models.FloatField(null=True, blank=True)
     period = models.IntegerField(null=True, blank=True)
