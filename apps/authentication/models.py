@@ -11,12 +11,6 @@ class UserRole(models.TextChoices):
     # Administradores com a flag is_superuser do Django
 
 
-class NotificationType(models.TextChoices):
-    SCHOLARSHIP = 'SCHOLARSHIP', _('Scholarship')
-    EVALUATION = 'EVALUATION', _('Evaluation')
-    SYSTEM = 'SYSTEM', _('System')
-
-
 class Institution(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -60,16 +54,6 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
-
-
-class Notification(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    title = models.CharField(max_length=255)
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    type = models.CharField(max_length=20, choices=NotificationType.choices)
-    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class AuditAction(models.TextChoices):

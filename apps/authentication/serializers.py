@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Notification, User
+from .models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -34,9 +34,3 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['about_me', 'linkedin', 'github']
-
-
-class NotificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Notification
-        fields = ['id', 'title', 'message', 'is_read', 'type', 'created_at']

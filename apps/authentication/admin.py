@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import AuditLog, Course, Institution, Notification, User
+from .models import AuditLog, Course, Institution, User
 
 
 # Configuração personalizada para o Utilizador
@@ -33,12 +33,6 @@ class InstitutionAdmin(admin.ModelAdmin):
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
     list_display = ('name',)
-
-
-@admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'title', 'type', 'is_read', 'created_at')
-    list_filter = ('type', 'is_read')
 
 
 @admin.register(AuditLog)
