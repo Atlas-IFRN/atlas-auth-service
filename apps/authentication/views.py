@@ -207,7 +207,7 @@ class SuapCallbackView(APIView):
                 user_id=user.id,
                 title=welcome_title,
                 message=welcome_msg,
-                notification_type="SYSTEM",
+                notification_type="system",
             )
 
         # Gerando o nosso próprio JWT
