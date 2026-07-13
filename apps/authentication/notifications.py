@@ -20,7 +20,7 @@ from config.celery import app as celery_app
 logger = logging.getLogger(__name__)
 
 
-def send_notification(user_id, title, message, notification_type="SYSTEM"):
+def send_notification(user_id, title, message, notification_type="system"):
     """Publica um evento de criação de notificação na fila (fire-and-forget).
 
     Gera um `event_id` por evento para idempotência: se o broker reentregar a
