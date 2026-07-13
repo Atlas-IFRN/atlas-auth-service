@@ -213,6 +213,9 @@ class SuapCallbackView(APIView):
         refresh = RefreshToken.for_user(user)
         refresh["role"] = user.role
         refresh["email"] = user.email or ""
+        # is_staff/admin viaja no token para que serviços downstream (ex.: feed)
+        # possam distinguir publicações "do sistema" (ATLAS) das dos usuários.
+        refresh["is_staff"] = user.is_staff
 
         return Response(
             {
