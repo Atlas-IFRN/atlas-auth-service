@@ -3,6 +3,8 @@ from datetime import timedelta
 from urllib.parse import urlsplit
 
 import requests
+from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -213,6 +215,9 @@ class SuapCallbackView(APIView):
         refresh = RefreshToken.for_user(user)
         refresh["role"] = user.role
         refresh["email"] = user.email or ""
+        # is_staff/admin viaja no token para que serviços downstream (ex.: feed)
+        # possam distinguir publicações "do sistema" (ATLAS) das dos usuários.
+        refresh["is_staff"] = user.is_staff
 
         return Response(
             {
@@ -286,6 +291,14 @@ class UserDetailView(APIView):
     def get(self, request, matricula):
         lookup_value = (matricula or "").strip()
 
+        # Cache do perfil (chave pelo valor consultado — matrícula OU id). O
+        # signal post_save/post_delete do User invalida ambas as chaves quando
+        # o usuário muda, então a resposta fica cacheada mas sempre correta.
+        cache_key = f"user:{lookup_value}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+
         base_qs = User.objects.select_related("course", "institution")
         user = base_qs.filter(registration_number=lookup_value).first()
         if user is None:
@@ -294,8 +307,9 @@ class UserDetailView(APIView):
             except (User.DoesNotExist, ValidationError, ValueError):
                 raise Http404("Usuário não encontrado por matrícula ou ID.")
 
-        serializer = UserSerializer(user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        data = UserSerializer(user).data
+        cache.set(cache_key, data, settings.USER_CACHE_TTL)
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class NotificationListView(APIView):

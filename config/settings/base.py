@@ -155,6 +155,27 @@ USE_TZ = True
 STATIC_URL = "/api/auth/static/"
 
 # ------------------------------------------------------------------------------
+# CACHE (Redis) — perfil de usuário
+# ------------------------------------------------------------------------------
+# O auth é a FONTE DA VERDADE do usuário, então o cache do perfil mora aqui:
+# `UserDetailView` (consumido por feed/track/scholarship) responde do cache e a
+# entrada é INVALIDADA por signal sempre que o usuário muda (perfil, login SUAP,
+# admin) — ver apps/authentication/signals.py. Assim a resposta continua
+# cacheada, mas sempre correta após qualquer alteração. KEY_PREFIX isola do
+# cache dos outros serviços que compartilham o mesmo Redis.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": env("AUTH_CACHE_URL", default="redis://redis:6379/6"),
+        "KEY_PREFIX": "auth",
+    }
+}
+
+# TTL do perfil no cache (backstop — a invalidação por signal é o mecanismo
+# principal de frescor; o TTL só cobre casos raros de alteração fora do ORM).
+USER_CACHE_TTL = env.int("USER_CACHE_TTL", default=3600)
+
+# ------------------------------------------------------------------------------
 # DEFAULTS
 # ------------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
