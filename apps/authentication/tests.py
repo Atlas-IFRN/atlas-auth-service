@@ -48,12 +48,15 @@ class UserDetailPrivacyTests(APITestCase):
             f'/api/auth/users/{target.registration_number}/',
         )
 
-    def test_student_cannot_see_another_students_registration_or_ira(self):
+    def test_student_can_see_another_students_registration_but_not_ira(self):
         response = self.get_profile(self.student, self.other_student)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['full_name'], self.other_student.full_name)
-        self.assertNotIn('registration_number', response.data)
+        self.assertEqual(
+            response.data['registration_number'],
+            self.other_student.registration_number,
+        )
         self.assertNotIn('ira', response.data)
 
     def test_student_can_see_own_registration_and_ira(self):
@@ -75,3 +78,89 @@ class UserDetailPrivacyTests(APITestCase):
             self.other_student.registration_number,
         )
         self.assertEqual(response.data['ira'], self.other_student.ira)
+
+
+class UserProfileSocialLinksTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.student = User.objects.create_user(
+            username='social-student',
+            password='test-password',
+            cpf='44444444444',
+            registration_number='20260004',
+            first_name='Diego',
+            full_name='Diego Student',
+            email='diego@example.com',
+            role=UserRole.STUDENT,
+        )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.student)
+
+    def update_profile(self, **data):
+        return self.client.patch('/api/auth/users/me/', data, format='json')
+
+    def test_accepts_and_canonicalizes_supported_profile_urls(self):
+        response = self.update_profile(
+            github='https://www.github.com/diego-dev',
+            linkedin='https://linkedin.com/in/diego-profissional',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['github'], 'https://github.com/diego-dev')
+        self.assertEqual(
+            response.data['linkedin'],
+            'https://www.linkedin.com/in/diego-profissional',
+        )
+
+    def test_rejects_external_domains(self):
+        response = self.update_profile(
+            github='https://example.com/diego-dev',
+            linkedin='https://example.com/in/diego-profissional',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('github', response.data)
+        self.assertIn('linkedin', response.data)
+
+    def test_rejects_extra_paths_and_url_parameters(self):
+        response = self.update_profile(
+            github='https://github.com/diego-dev/repositories',
+            linkedin='https://www.linkedin.com/in/diego-profissional?ref=atlas',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('github', response.data)
+        self.assertIn('linkedin', response.data)
+
+    def test_rejects_insecure_http_profile_urls(self):
+        response = self.update_profile(
+            github='http://github.com/diego-dev',
+            linkedin='http://www.linkedin.com/in/diego-profissional',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('github', response.data)
+        self.assertIn('linkedin', response.data)
+
+    def test_does_not_expose_legacy_unsafe_links(self):
+        self.student.github = 'https://example.com/diego-dev'
+        self.student.linkedin = 'https://example.com/in/diego-profissional'
+        self.student.save(update_fields=['github', 'linkedin'])
+
+        response = self.client.get('/api/auth/users/me/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['github'])
+        self.assertIsNone(response.data['linkedin'])
+
+    def test_allows_removing_social_profiles(self):
+        self.student.github = 'https://github.com/diego-dev'
+        self.student.linkedin = 'https://www.linkedin.com/in/diego-profissional'
+        self.student.save(update_fields=['github', 'linkedin'])
+
+        response = self.update_profile(github='', linkedin='')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['github'], '')
+        self.assertEqual(response.data['linkedin'], '')
