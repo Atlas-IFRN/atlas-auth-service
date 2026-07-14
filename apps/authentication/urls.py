@@ -1,7 +1,9 @@
+from django.conf import settings
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
+    DebugSetRoleView,
     InternalValidateView,
     LogoutView,
     SuapCallbackView,
@@ -29,3 +31,11 @@ urlpatterns = [
     # Rota de logout
     path('logout/', LogoutView.as_view(), name='auth_logout'),
 ]
+
+# Rota de DEBUG: alterna o papel do usuário logado (professor/estudante) para
+# testar funcionalidades restritas a docentes. Só é montada com DJANGO_DEBUG=True
+# — nunca fica exposta em produção.
+if settings.DEBUG:
+    urlpatterns += [
+        path('debug/set-role/', DebugSetRoleView.as_view(), name='debug_set_role'),
+    ]
