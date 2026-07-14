@@ -12,7 +12,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Course, Institution, User, UserRole
 from .notifications import send_notification
-from .serializers import UserProfileUpdateSerializer, UserSerializer
+from .serializers import (
+    PublicUserSerializer,
+    UserProfileUpdateSerializer,
+    UserSerializer,
+)
 
 
 class SuapLoginUrlView(APIView):
@@ -297,7 +301,15 @@ class UserDetailView(APIView):
             except (User.DoesNotExist, ValidationError, ValueError):
                 raise Http404("Usuário não encontrado por matrícula ou ID.")
 
-        serializer = UserSerializer(user)
+        can_view_academic_data = (
+            request.user.id == user.id
+            or request.user.is_superuser
+            or request.user.role == UserRole.TEACHER
+        )
+        serializer_class = (
+            UserSerializer if can_view_academic_data else PublicUserSerializer
+        )
+        serializer = serializer_class(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
