@@ -2,6 +2,7 @@ import os
 from urllib.parse import urlsplit
 
 import requests
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from rest_framework import status
@@ -273,6 +274,47 @@ class UserProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+class DebugSetRoleView(APIView):
+    """[DEMO] Alterna o papel do usuário autenticado entre professor e estudante.
+
+    Existe apenas para apresentar funcionalidades restritas a docentes. A rota
+    só é montada quando a flag ``DEMO_TOOLS_ENABLED`` (env ATLAS_DEMO_TOOLS) está
+    ligada (ver urls.py); o guard abaixo é uma segunda barreira caso a rota seja
+    exposta por engano — do contrário responde 404.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not settings.DEMO_TOOLS_ENABLED:
+            raise Http404()
+
+        raw = request.data.get("teacher")
+        if isinstance(raw, str):
+            teacher = raw.strip().lower() in ("true", "1", "yes", "on")
+        else:
+            teacher = bool(raw)
+
+        user = request.user
+        user.role = UserRole.TEACHER if teacher else UserRole.STUDENT
+        user.save(update_fields=["role"])
+
+        # Emite novos tokens já com a claim `role` atualizada, para que os demais
+        # serviços validem o papel pelo header sem precisar chamar o auth.
+        refresh = RefreshToken.for_user(user)
+        refresh["role"] = user.role
+        refresh["email"] = user.email or ""
+
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class UserDetailView(APIView):
