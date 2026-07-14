@@ -212,9 +212,15 @@ class SuapCallbackView(APIView):
                 or eu_data.get("email_preferencial")
                 or eu_data.get("email_academico")
                 or eu_data.get("email"),
+                # first_name = nome_usual (nome social/de tratamento);
+                # full_name = nome_registro (nome de registro/completo), que é
+                # o campo usado na busca de perfis. Fallbacks garantem que
+                # nenhum usuário fique sem full_name caso o SUAP não traga
+                # nome_registro naquela resposta.
                 "first_name": suap_data.get("nome_usual") or suap_data.get("primeiro_nome"),
-                "full_name": vinculo.get("nome")
+                "full_name": suap_data.get("nome_registro")
                 or eu_data.get("nome_registro")
+                or vinculo.get("nome")
                 or eu_data.get("nome")
                 or suap_data.get("nome")
                 or suap_data.get("nome_usual"),
