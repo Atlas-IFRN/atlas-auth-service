@@ -28,6 +28,27 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
 
+class PublicUserSerializer(UserSerializer):
+    """Dados que podem ser exibidos a um aluno em perfis de terceiros."""
+
+    class Meta(UserSerializer.Meta):
+        fields = [
+            'id',
+            'first_name',
+            'full_name',
+            'image',
+            'email',
+            'role',
+            'period',
+            'about_me',
+            'linkedin',
+            'github',
+            'lattes_url',
+            'course_name',
+            'institution_name',
+        ]
+
+
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     """Apenas campos sociais editáveis pelo próprio usuário via PATCH /me/."""
 
