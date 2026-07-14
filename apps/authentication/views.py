@@ -1,5 +1,4 @@
 import os
-from datetime import timedelta
 from urllib.parse import urlsplit
 
 import requests
@@ -7,16 +6,15 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import Http404
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Course, Institution, Notification, NotificationType, User, UserRole
-from .serializers import NotificationSerializer, UserProfileUpdateSerializer, UserSerializer
+from .models import Course, Institution, User, UserRole
+from .notifications import send_notification
+from .serializers import UserProfileUpdateSerializer, UserSerializer
 
 
 class SuapLoginUrlView(APIView):
@@ -205,8 +203,13 @@ class SuapCallbackView(APIView):
             else:
                 welcome_msg = f"Olá {user.first_name}! Sua conta foi criada com sucesso como professor. Bem-vindo ao ATLAS, sua plataforma de gestão acadêmica. Comece explorando os recursos disponíveis."
 
-            Notification.objects.create(
-                user=user, title=welcome_title, message=welcome_msg, type=NotificationType.SYSTEM
+            # Notificações vivem no notification-service: criamos via chamada
+            # interna (best-effort — falha não interrompe o login).
+            send_notification(
+                user_id=user.id,
+                title=welcome_title,
+                message=welcome_msg,
+                notification_type="system",
             )
 
         # Gerando o nosso próprio JWT
@@ -310,52 +313,6 @@ class UserDetailView(APIView):
         data = UserSerializer(user).data
         cache.set(cache_key, data, settings.USER_CACHE_TTL)
         return Response(data, status=status.HTTP_200_OK)
-
-
-class NotificationListView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        # filtro deslizante de 5 dias — recalcula a cada request, não na importação do módulo
-        filtro_de_dias = timezone.now() - timedelta(days=5)
-        qs = Notification.objects.filter(
-            user=request.user,
-            created_at__gte=filtro_de_dias,
-        )
-
-        is_read = request.query_params.get('is_read')
-        if is_read is not None:
-            qs = qs.filter(is_read=is_read.lower() in ('true', '1', 'yes'))
-
-        type_filter = request.query_params.get('type')
-        if type_filter:
-            qs = qs.filter(type=type_filter)
-
-        serializer = NotificationSerializer(qs.order_by('-created_at'), many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class NotificationReadView(APIView):
-    """PATCH /notifications/{id}/read/ — marca uma notificação como lida."""
-
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request, notification_id):
-        notif = get_object_or_404(Notification, pk=notification_id, user=request.user)
-        if not notif.is_read:
-            notif.is_read = True
-            notif.save(update_fields=['is_read'])
-        return Response(NotificationSerializer(notif).data, status=status.HTTP_200_OK)
-
-
-class NotificationMarkAllReadView(APIView):
-    """POST /notifications/mark-all-read/ — marca todas as não lidas como lidas."""
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
-        return Response({"updated": updated}, status=status.HTTP_200_OK)
 
 
 class InternalValidateView(APIView):

@@ -179,3 +179,25 @@ USER_CACHE_TTL = env.int("USER_CACHE_TTL", default=3600)
 # DEFAULTS
 # ------------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ==============================================================================
+# CELERY (RabbitMQ broker) — auth é apenas PRODUTOR
+# ==============================================================================
+# Publica o evento `notifications.create` na fila do notification-service.
+# Não roda worker. Timeout curto + sem retry de publicação para que um broker
+# indisponível nunca segure o fluxo de login (a publicação é best-effort).
+NOTIFICATIONS_QUEUE = env("NOTIFICATIONS_QUEUE", default="notifications")
+
+CELERY_BROKER_URL = env(
+    'CELERY_BROKER_URL',
+    default='amqp://guest:guest@rabbitmq:5672//',
+)
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = TIME_ZONE
+# Publicação best-effort: se o broker estiver fora, falha rápido (~2×timeout)
+# e é capturada, sem segurar o login. Não descarta se o broker só estiver lento.
+CELERY_BROKER_CONNECTION_TIMEOUT = 2
+CELERY_BROKER_CONNECTION_RETRY = False
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 0
