@@ -81,7 +81,7 @@ Base URL local: `http://localhost:8000`
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
 | `GET`  | `/api/auth/users/me/` | Perfil do usuário autenticado |
-| `GET`  | `/api/auth/users/<matricula>/` | Perfil público por matrícula |
+| `GET`  | `/api/auth/users/<matricula>/` | Perfil por matrícula (oculta matrícula e IRA quando um aluno consulta outro usuário) |
 | `GET`  | `/api/auth/notifications/` | Notificações recentes (últimos 5 dias) |
 
 Campos retornados pelo `UserSerializer`: `id`, `matricula`, `first_name`, `full_name`, `email`, `cpf`, `role`, `ira`, `period`, `about_me`, `linkedin`, `github`, `curriculo_lattes`, `course_name`, `institution_name`.

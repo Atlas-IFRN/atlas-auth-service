@@ -14,7 +14,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Course, Institution, User, UserRole
 from .notifications import send_notification
-from .serializers import UserProfileUpdateSerializer, UserSerializer
+from .serializers import (
+    PublicUserSerializer,
+    UserProfileUpdateSerializer,
+    UserSerializer,
+)
 
 
 class SuapLoginUrlView(APIView):
@@ -280,6 +284,47 @@ class UserProfileView(APIView):
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
 
+class DebugSetRoleView(APIView):
+    """[DEMO] Alterna o papel do usuário autenticado entre professor e estudante.
+
+    Existe apenas para apresentar funcionalidades restritas a docentes. A rota
+    só é montada quando a flag ``DEMO_TOOLS_ENABLED`` (env ATLAS_DEMO_TOOLS) está
+    ligada (ver urls.py); o guard abaixo é uma segunda barreira caso a rota seja
+    exposta por engano — do contrário responde 404.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not settings.DEMO_TOOLS_ENABLED:
+            raise Http404()
+
+        raw = request.data.get("teacher")
+        if isinstance(raw, str):
+            teacher = raw.strip().lower() in ("true", "1", "yes", "on")
+        else:
+            teacher = bool(raw)
+
+        user = request.user
+        user.role = UserRole.TEACHER if teacher else UserRole.STUDENT
+        user.save(update_fields=["role"])
+
+        # Emite novos tokens já com a claim `role` atualizada, para que os demais
+        # serviços validem o papel pelo header sem precisar chamar o auth.
+        refresh = RefreshToken.for_user(user)
+        refresh["role"] = user.role
+        refresh["email"] = user.email or ""
+
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class UserDetailView(APIView):
     """Resolve um usuário por matrícula (registration_number) ou por UUID (id).
 
@@ -309,10 +354,17 @@ class UserDetailView(APIView):
                 user = base_qs.get(id=lookup_value)
             except (User.DoesNotExist, ValidationError, ValueError):
                 raise Http404("Usuário não encontrado por matrícula ou ID.")
-
-        data = UserSerializer(user).data
-        cache.set(cache_key, data, settings.USER_CACHE_TTL)
-        return Response(data, status=status.HTTP_200_OK)
+ 
+        can_view_academic_data = (
+            request.user.id == user.id
+            or request.user.is_superuser
+            or request.user.role == UserRole.TEACHER
+        )
+        serializer_class = (
+            UserSerializer if can_view_academic_data else PublicUserSerializer
+        )
+        serializer = serializer_class(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class InternalValidateView(APIView):

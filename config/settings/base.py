@@ -34,6 +34,13 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default="django-insecure-)-e9mkhw5w9w8c8l=
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
+# Habilita ferramentas de demonstração (ex.: endpoint que alterna o papel do
+# usuário logado para apresentar funcionalidades restritas a docentes). É uma
+# flag PRÓPRIA, independente de DEBUG: permite expor esses recursos num
+# ambiente de demo SEM ligar o Django DEBUG (que vaza traces/configs). Fica
+# desligada por padrão — nunca ative em produção real.
+DEMO_TOOLS_ENABLED = env.bool("ATLAS_DEMO_TOOLS", default=False)
+
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
