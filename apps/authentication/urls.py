@@ -6,6 +6,7 @@ from .views import (
     DebugSetRoleView,
     InternalValidateView,
     LogoutView,
+    ProfileSearchView,
     SuapCallbackView,
     SuapLoginUrlView,
     UserDetailView,
@@ -26,6 +27,9 @@ urlpatterns = [
     # Rotas de perfil
     path('me/', UserProfileView.as_view(), name='user_me'),
     path('users/me/', UserProfileView.as_view(), name='user_profile'),  # alias mantido
+    # Busca de perfis — ANTES do lookup por matrícula, senão "search" seria
+    # capturado como uma matrícula por <str:matricula>.
+    path('users/search/', ProfileSearchView.as_view(), name='user_search'),
     path('users/<str:matricula>/', UserDetailView.as_view(), name='user_detail'),
 
     # Rota de logout
