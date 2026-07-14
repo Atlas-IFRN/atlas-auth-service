@@ -277,18 +277,18 @@ class UserProfileView(APIView):
 
 
 class DebugSetRoleView(APIView):
-    """[DEBUG] Alterna o papel do usuário autenticado entre professor e estudante.
+    """[DEMO] Alterna o papel do usuário autenticado entre professor e estudante.
 
-    Existe apenas para facilitar o teste de funcionalidades restritas a docentes
-    em desenvolvimento. A rota só é montada quando ``settings.DEBUG`` é True
-    (ver urls.py); o guard abaixo é uma segunda barreira caso a rota seja
-    exposta por engano — em produção responde 404.
+    Existe apenas para apresentar funcionalidades restritas a docentes. A rota
+    só é montada quando a flag ``DEMO_TOOLS_ENABLED`` (env ATLAS_DEMO_TOOLS) está
+    ligada (ver urls.py); o guard abaixo é uma segunda barreira caso a rota seja
+    exposta por engano — do contrário responde 404.
     """
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if not settings.DEBUG:
+        if not settings.DEMO_TOOLS_ENABLED:
             raise Http404()
 
         raw = request.data.get("teacher")
