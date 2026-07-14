@@ -6,7 +6,8 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import Http404
-from rest_framework import status
+from rest_framework import filters, generics, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,10 +16,39 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Course, Institution, User, UserRole
 from .notifications import send_notification
 from .serializers import (
+    ProfileSearchSerializer,
     PublicUserSerializer,
     UserProfileUpdateSerializer,
     UserSerializer,
 )
+
+
+class ProfileSearchPagination(PageNumberPagination):
+    page_size = 12
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+
+class ProfileSearchView(generics.ListAPIView):
+    """Busca compacta de perfis para a busca global do cabeçalho.
+
+    Casa por nome (full_name) ou matrícula (registration_number) via SearchFilter
+    (`?search=`). Retorna só nome, papel legível (Estudante/Professor) e
+    instituição — o suficiente para a linha de resultado e o link /perfil/{matricula}.
+    """
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = ProfileSearchPagination
+    serializer_class = ProfileSearchSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'registration_number']
+
+    def get_queryset(self):
+        return (
+            User.objects.select_related('institution')
+            .filter(is_active=True)
+            .order_by('full_name')
+        )
 
 
 class SuapLoginUrlView(APIView):
