@@ -3,6 +3,8 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
+    AuditIdentityBatchView,
+    AuditLogListView,
     DebugSetRoleView,
     InternalValidateView,
     LogoutView,
@@ -15,6 +17,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path('audit-logs/', AuditLogListView.as_view(), name='audit-log-list'),
     # Rotas do SUAP (Fluxo de entrada)
     path('suap/login/', SuapLoginUrlView.as_view(), name='suap_login-url'),
     path('suap/callback/', SuapCallbackView.as_view(), name='suap_callback'),
@@ -33,6 +36,11 @@ urlpatterns = [
     path('users/search/', ProfileSearchView.as_view(), name='user_search'),
     # Resolução em lote por UUID (evita N+1) — antes do lookup por matrícula.
     path('users/batch/', UserBatchView.as_view(), name='user_batch'),
+    path(
+        'users/audit-identities/',
+        AuditIdentityBatchView.as_view(),
+        name='audit_identity_batch',
+    ),
     path('users/<str:matricula>/', UserDetailView.as_view(), name='user_detail'),
 
     # Rota de logout

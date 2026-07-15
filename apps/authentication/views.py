@@ -14,14 +14,37 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Course, Institution, User, UserRole
+from .models import AuditLog, Course, Institution, User, UserRole
 from .notifications import send_notification
 from .serializers import (
+    AuditLogSerializer,
     ProfileSearchSerializer,
     PublicUserSerializer,
     UserProfileUpdateSerializer,
     UserSerializer,
 )
+
+
+class AuditLogPagination(PageNumberPagination):
+    page_size = 100
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class AuditLogListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AuditLogSerializer
+    pagination_class = AuditLogPagination
+
+    def get_queryset(self):
+        queryset = AuditLog.objects.all()
+        action_name = self.request.query_params.get('action')
+        table_name = self.request.query_params.get('table_name')
+        if action_name:
+            queryset = queryset.filter(action=action_name.upper())
+        if table_name:
+            queryset = queryset.filter(table_name=table_name)
+        return queryset
 
 
 class ProfileSearchPagination(PageNumberPagination):
@@ -396,6 +419,45 @@ class UserBatchView(APIView):
             id__in=valid_ids
         )
         return Response(UserSerializer(users, many=True).data, status=status.HTTP_200_OK)
+
+
+class AuditIdentityBatchView(APIView):
+    """Resolve somente UUID e matrícula para a timeline de auditoria.
+
+    O corpo evita URLs extensas e permite resolver todos os responsáveis da
+    página agregada com uma única consulta ao banco do Auth Service.
+    """
+
+    permission_classes = [IsAuthenticated]
+    MAX_IDS = 500
+
+    def post(self, request):
+        raw_ids = request.data.get('ids', [])
+        if not isinstance(raw_ids, list):
+            return Response(
+                {'detail': 'O campo ids deve ser uma lista.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valid_ids = []
+        seen_ids = set()
+        for value in raw_ids:
+            try:
+                user_id = uuid.UUID(str(value))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if user_id in seen_ids:
+                continue
+            seen_ids.add(user_id)
+            valid_ids.append(user_id)
+            if len(valid_ids) >= self.MAX_IDS:
+                break
+
+        identities = User.objects.filter(id__in=valid_ids).values(
+            'id',
+            'registration_number',
+        )
+        return Response(list(identities), status=status.HTTP_200_OK)
 
 
 class UserDetailView(APIView):
