@@ -2,7 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from .audit import clear_current_actor_id, set_current_actor_id
-from .models import AuditLog, User
+from .models import AuditLog, User, UserRole
 
 
 class AuthenticationAuditSignalsTests(TestCase):
@@ -39,6 +39,7 @@ class AuditIdentityBatchTests(TestCase):
             username='audit-viewer',
             cpf='00000000001',
             registration_number='202600000010',
+            role=UserRole.TEACHER,
             full_name='Responsável pela auditoria',
         )
         self.other_user = User.objects.create_user(
@@ -73,4 +74,46 @@ class AuditIdentityBatchTests(TestCase):
         self.assertEqual(
             {item['registration_number'] for item in response.data},
             {'202600000010', '202600000011'},
+        )
+
+
+class AuditLogAccessTests(TestCase):
+    def setUp(self):
+        self.student = User.objects.create_user(
+            username='audit-student',
+            cpf='00000000003',
+            registration_number='202600000012',
+            full_name='Aluno sem acesso',
+            role=UserRole.STUDENT,
+        )
+        self.teacher = User.objects.create_user(
+            username='audit-teacher',
+            cpf='00000000004',
+            registration_number='202600000013',
+            full_name='Professor com acesso',
+            role=UserRole.TEACHER,
+        )
+        self.client = APIClient()
+
+    def test_only_teacher_can_list_audit_logs(self):
+        self.client.force_authenticate(self.student)
+        self.assertEqual(self.client.get('/api/auth/audit-logs/').status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                '/api/auth/users/audit-identities/',
+                {'ids': [str(self.teacher.id)]},
+                format='json',
+            ).status_code,
+            403,
+        )
+
+        self.client.force_authenticate(self.teacher)
+        self.assertEqual(self.client.get('/api/auth/audit-logs/').status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                '/api/auth/users/audit-identities/',
+                {'ids': [str(self.teacher.id)]},
+                format='json',
+            ).status_code,
+            200,
         )
