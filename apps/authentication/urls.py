@@ -9,6 +9,7 @@ from .views import (
     ProfileSearchView,
     SuapCallbackView,
     SuapLoginUrlView,
+    UserBatchView,
     UserDetailView,
     UserProfileView,
 )
@@ -30,6 +31,8 @@ urlpatterns = [
     # Busca de perfis — ANTES do lookup por matrícula, senão "search" seria
     # capturado como uma matrícula por <str:matricula>.
     path('users/search/', ProfileSearchView.as_view(), name='user_search'),
+    # Resolução em lote por UUID (evita N+1) — antes do lookup por matrícula.
+    path('users/batch/', UserBatchView.as_view(), name='user_batch'),
     path('users/<str:matricula>/', UserDetailView.as_view(), name='user_detail'),
 
     # Rota de logout

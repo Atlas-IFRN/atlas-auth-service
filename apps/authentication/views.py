@@ -1,4 +1,5 @@
 import os
+import uuid
 from urllib.parse import urlsplit
 
 import requests
@@ -359,6 +360,42 @@ class DebugSetRoleView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class UserBatchView(APIView):
+    """Resolve VÁRIOS usuários por UUID numa só chamada — evita o N+1.
+
+    Usado por serviços que guardam listas de UUIDs (ex.: o banco de talentos do
+    scholarship) para embutir os dados dos alunos sem uma chamada por aluno.
+    Aceita `?ids=uuid1,uuid2,...` e devolve a lista de perfis no mesmo formato do
+    UserDetailView (UserSerializer). Ids malformados são ignorados; a ordem da
+    resposta não é garantida (o chamador indexa por `id`).
+    """
+
+    permission_classes = [IsAuthenticated]
+    MAX_IDS = 200
+
+    def get(self, request):
+        raw = (request.query_params.get("ids") or "").strip()
+        if not raw:
+            return Response([], status=status.HTTP_200_OK)
+
+        valid_ids = []
+        for value in raw.split(","):
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                valid_ids.append(uuid.UUID(value))
+            except (ValueError, TypeError):
+                continue
+            if len(valid_ids) >= self.MAX_IDS:
+                break
+
+        users = User.objects.select_related("course", "institution").filter(
+            id__in=valid_ids
+        )
+        return Response(UserSerializer(users, many=True).data, status=status.HTTP_200_OK)
 
 
 class UserDetailView(APIView):
