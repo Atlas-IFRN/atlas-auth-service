@@ -16,6 +16,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import AuditLog, Course, Institution, User, UserRole
 from .notifications import send_notification
+from .permissions import IsTeacher
 from .serializers import (
     AuditLogSerializer,
     ProfileSearchSerializer,
@@ -32,7 +33,7 @@ class AuditLogPagination(PageNumberPagination):
 
 
 class AuditLogListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsTeacher]
     serializer_class = AuditLogSerializer
     pagination_class = AuditLogPagination
 
@@ -428,7 +429,7 @@ class AuditIdentityBatchView(APIView):
     página agregada com uma única consulta ao banco do Auth Service.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsTeacher]
     MAX_IDS = 500
 
     def post(self, request):
