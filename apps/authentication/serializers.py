@@ -3,7 +3,22 @@ from urllib.parse import urlsplit
 
 from rest_framework import serializers
 
-from .models import User
+from .models import AuditLog, User
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditLog
+        fields = [
+            'id',
+            'table_name',
+            'action',
+            'record_id',
+            'user_id',
+            'payload',
+            'created_at',
+        ]
+        read_only_fields = fields
 
 
 GITHUB_USERNAME_PATTERN = re.compile(
