@@ -65,6 +65,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
+
+    # Exporta métricas em /metrics para o Prometheus (atlas-observability).
+    "django_prometheus",
 ]
 
 # -------------------------------------------------------------------------------
@@ -103,6 +106,8 @@ SIMPLE_JWT = {
 # MIDDLEWARE
 # ------------------------------------------------------------------------------
 MIDDLEWARE = [
+    # django-prometheus: PRIMEIRO middleware (mede a request inteira).
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -111,6 +116,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # django-prometheus: ÚLTIMO middleware.
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
